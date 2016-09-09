@@ -1,0 +1,512 @@
+---
+title: "Filter variants by predicted effect, wecare feb2016"
+author: "Alexey Larionov"
+output: html_document
+params:
+  interim_data: ""
+  priority_genes: ""
+---
+
+started: 01Mar2016  
+last updated: 09Aug2016
+
+# Criteria
+
+### Loss of function: 
+all (~5k)
+
+### ClinSig
+non-benign (~1k)
+
+### COSM in Existing_Variation
+all (~28k)
+
+### Priority genes (in-house lists):
+BC risk (65), BC somatic(94), DNA repair (143) and Estrogen-signalling related (7)
+
+### Missense
+
+*strict*: deleterious and probably_damaging with max scores (~2k)  
+*medium_1*: deleterious and probably_damaging with any scores (~14k)  
+*medium_2*: deleterious or probably_damaging with any scores (~34k)  
+*relaxed*: (all missence): ~81k  
+
+*priority_strict*: strict + priority_gene (146)  
+*priority_relaxed*: relaxed + priority_gene (1540)  
+
+# start_section
+
+```{r start_section}
+
+# Start time
+Sys.time()
+
+# Do NOT clean-up at this stage
+#rm(list=ls()) # this would remove params object!
+graphics.off()
+
+# Data folder
+interim_data_folder <- params$interim_data
+priority_genes_folder <- params$priority_genes
+
+library(dplyr)
+
+# For debugging
+#interim_data_folder <- "/scratch/medgen/users/alexey/wecare_aug2016/interim_data"
+#priority_genes_folder <- "/scratch/medgen/users/alexey/wecare_aug2016/gene_lists"
+#setwd("/scratch/medgen/scripts/wecare_skat_08.16/scripts")
+
+```
+
+# load_and_check_data
+
+```{r load_and_check_data}
+
+# Remove params object to avoid interference with load() function
+rm(params)
+
+interim_data_file <- paste(interim_data_folder, "s03_filter_genotypes_feb2016.RData", sep="/")
+load(file=interim_data_file)
+ls()
+
+dim(covar.df)
+str(covar.df)
+covar.df[1:5,1:5]
+
+dim(demographics.df)
+str(demographics.df)
+demographics.df[1:5,1:5]
+
+dim(samples.df)
+str(samples.df)
+samples.df[1:5,]
+
+dim(vv.df)
+str(vv.df)
+vv.df[1:5,1:5]
+
+dim(gt.mx)
+class(gt.mx)
+gt.mx[1:15,1:5]
+
+dim(gq.mx)
+class(gq.mx)
+gq.mx[1:15,1:5]
+
+dim(dp.mx)
+class(dp.mx)
+dp.mx[1:15,1:5]
+
+dim(ref.mx)
+class(ref.mx)
+ref.mx[1:15,1:5]
+
+dim(alt.mx)
+class(alt.mx)
+alt.mx[1:15,1:5]
+
+# Check consistence of rownames
+sum(rownames(gt.mx) != rownames(vv.df), na.rm=TRUE)
+
+sum(rownames(gt.mx) != rownames(gq.mx), na.rm=TRUE)
+sum(rownames(gt.mx) != rownames(dp.mx), na.rm=TRUE)
+sum(rownames(gt.mx) != rownames(ref.mx), na.rm=TRUE)
+sum(rownames(gt.mx) != rownames(alt.mx), na.rm=TRUE)
+
+# Check consistence of colnames (sub(".DP","") may be used instead)
+sum(substr(colnames(gt.mx),0,6) != substr(colnames(gq.mx),0,6), na.rm=TRUE)
+sum(substr(colnames(gt.mx),0,6) != substr(colnames(dp.mx),0,6), na.rm=TRUE)
+sum(substr(colnames(gt.mx),0,6) != substr(colnames(ref.mx),0,6), na.rm=TRUE)
+sum(substr(colnames(gt.mx),0,6) != substr(colnames(alt.mx),0,6), na.rm=TRUE)
+
+```
+
+# explore_annotations
+
+SIFT: tolerated, deleterious, tolerated_low_confidence, deleterious_low_confidence
+
+PolyPhen: benign, possibly_damaging, probably_damaging, unknown          
+
+CLIN_SIG: likely_benign, benign, risk_factor, not_provided, uncertain_significance, 
+pathogenic, likely_pathogenic, association, protective, other, drug_response,  confers_sensitivity
+
+Somatic: COSM in Existing_variation
+
+```{r explore_annotations}
+
+# SIFT
+unique(sub("\\(.*\\)","",as.vector(vv.df$SIFT)))
+
+# PolyPhen
+unique(sub("\\(.*\\)","",as.vector(vv.df$PolyPhen)))
+
+#CLIN_SIG
+unique(unlist(strsplit(as.vector(vv.df$CLIN_SIG), split="\\&")))
+
+```
+
+# split_calls_and_scores_in_SIFT
+
+SIFT: the higher score the less deleterious
+
+```{r split_calls_and_scores_in_SIFT}
+
+SIFT_Call <- 
+  vv.df$SIFT  %>% 
+  as.vector() %>% 
+  sub("\\(.*\\)","",.)
+
+NA -> SIFT_Call[SIFT_Call == ""]
+
+length(SIFT_Call)
+SIFT_Call[c(1:10,49)]
+
+SIFT_Score <- 
+  vv.df$SIFT %>% 
+  as.vector() %>% 
+  sub(".*\\(","",.)  %>% 
+  sub("\\)","",.)
+
+NA -> SIFT_Score[SIFT_Score == ""]
+SIFT_Score <- as.numeric(SIFT_Score)
+
+length(SIFT_Score)
+SIFT_Score[1:10]
+
+vv.df <- cbind(vv.df, SIFT_Call, SIFT_Score)
+rm (SIFT_Call, SIFT_Score)
+vv.df[c(1:10,180:190),c("SIFT", "SIFT_Call", "SIFT_Score")]
+
+```
+
+# split_calls_and_scores_in_PolyPhen
+
+PolyPhen: the higher score the more damaging
+
+```{r split_calls_and_scores_in_PolyPhen}
+
+PolyPhen_Call <- 
+  vv.df$PolyPhen  %>% 
+  as.vector() %>% 
+  sub("\\(.*\\)","",.)
+
+NA -> PolyPhen_Call[PolyPhen_Call == ""]
+
+length(PolyPhen_Call)
+PolyPhen_Call[1:10]
+
+PolyPhen_Score <- 
+  vv.df$PolyPhen %>% 
+  as.vector() %>% 
+  sub(".*\\(","",.)  %>% 
+  sub("\\)","",.)
+
+NA -> PolyPhen_Score[PolyPhen_Score == ""]
+PolyPhen_Score <- as.numeric(PolyPhen_Score)
+
+length(PolyPhen_Score)
+PolyPhen_Score[1:10]
+
+vv.df <- cbind(vv.df, PolyPhen_Call, PolyPhen_Score)
+rm (PolyPhen_Call, PolyPhen_Score)
+vv.df[c(1:10,49),c("PolyPhen", "PolyPhen_Call", "PolyPhen_Score")]
+
+```
+
+# make_lof_index
+
+```{r make_lof_index}
+
+splice_acceptor_variant <- grepl( "splice_acceptor_variant", vv.df$Consequence)
+sum(splice_acceptor_variant)
+
+splice_donor_variant <- grepl( "splice_donor_variant", vv.df$Consequence)
+sum(splice_donor_variant)
+
+stop_gain <- grepl( "stop_gain", vv.df$Consequence)
+sum(stop_gain)
+
+frameshift_variant <- grepl( "frameshift_variant", vv.df$Consequence)
+sum(frameshift_variant)
+
+stop_lost <- grepl( "stop_lost", vv.df$Consequence)
+sum(stop_lost)
+
+start_lost <- grepl( "start_lost", vv.df$Consequence)
+sum(start_lost)
+
+lof_all <- splice_acceptor_variant | splice_donor_variant | stop_gain | frameshift_variant | stop_lost | start_lost
+
+sum(lof_all)
+
+rm(splice_acceptor_variant, splice_donor_variant, stop_gain, frameshift_variant, stop_lost, start_lost)
+
+```
+
+# make_missense_indices
+
+```{r make_missense_indices}
+
+missense_all <- grepl( "missense_variant", vv.df$Consequence)
+sum(missense_all)
+
+deleterious <- vv.df$SIFT_Call == "deleterious"
+FALSE -> deleterious[is.na(deleterious)]
+sum(deleterious)
+
+probably_damaging <- vv.df$PolyPhen_Call == "probably_damaging"
+FALSE -> probably_damaging[is.na(probably_damaging)]
+sum(probably_damaging)
+
+missense_medium_1 <- deleterious & probably_damaging
+missense_medium_2 <- deleterious | probably_damaging
+sum(missense_medium_1)
+sum(missense_medium_2)
+rm(deleterious, probably_damaging)
+
+deleterious_strict <- vv.df$SIFT_Call == "deleterious" & vv.df$SIFT_Score == 0
+FALSE -> deleterious_strict[is.na(deleterious_strict)]
+sum(deleterious_strict)
+
+damaging_strict <- vv.df$PolyPhen_Call == "probably_damaging" & vv.df$PolyPhen_Score == 1
+FALSE -> damaging_strict[is.na(damaging_strict)]
+sum(damaging_strict)
+
+missense_strict <- deleterious_strict & damaging_strict
+sum(missense_strict)
+rm(deleterious_strict, damaging_strict)
+
+```
+
+# make_clinsig_index
+
+Note sums w/o na.rm=TRUE
+
+```{r make_clinsig_index}
+
+benign <- grepl( "benign", vv.df$CLIN_SIG) # includes "likely_benign"
+sum(benign)
+
+risk_factor <- grepl( "risk_factor", vv.df$CLIN_SIG)
+sum(risk_factor)
+
+pathogenic <- grepl( "pathogenic", vv.df$CLIN_SIG) # includes "likely_pathogenic"
+sum(pathogenic)
+
+association <- grepl( "association", vv.df$CLIN_SIG)
+sum(association)
+
+protective <- grepl( "protective", vv.df$CLIN_SIG)
+sum(protective)
+
+drug_response <- grepl( "drug_response", vv.df$CLIN_SIG)
+sum(drug_response)
+
+confers_sensitivity <- grepl( "confers_sensitivity", vv.df$CLIN_SIG)
+sum(confers_sensitivity)
+
+other <- grepl( "other", vv.df$CLIN_SIG)
+sum(other)
+
+clinsig_non_benign <- risk_factor | pathogenic | association | protective | drug_response | confers_sensitivity | other
+
+sum(clinsig_non_benign)
+
+rm(benign, risk_factor, pathogenic, association, protective, drug_response, confers_sensitivity, other)
+
+```
+
+# make_somatic_index
+
+```{r make_somatic_index}
+
+somatic <- grepl("COSM", vv.df$Existing_variation)
+sum(somatic)
+
+```
+
+# make_priority_genes_index
+
+```{r make_priority_genes_index}
+
+# Read gene lists
+bc_risk_file <- paste(priority_genes_folder, "bc_risk.txt", sep="/")
+bc_risk_genes <- read.table(bc_risk_file)
+bc_risk_genes <- as.vector(bc_risk_genes[,1])
+rm(bc_risk_file)
+
+bc_somatic_file <- paste(priority_genes_folder, "bc_somatic.txt", sep="/")
+bc_somatic_genes <- read.table(bc_somatic_file)
+bc_somatic_genes <- as.vector(bc_somatic_genes[,1])
+rm(bc_somatic_file)
+
+dna_repair_file <- paste(priority_genes_folder, "dna_repair.txt", sep="/")
+dna_repair_genes <- read.table(dna_repair_file)
+dna_repair_genes <- as.vector(dna_repair_genes[,1])
+rm(dna_repair_file)
+
+es_related_file <- paste(priority_genes_folder, "es_related.txt", sep="/")
+es_related_genes <- read.table(es_related_file)
+es_related_genes <- as.vector(es_related_genes[,1])
+rm(es_related_file)
+
+# Make separate indices
+bc_risk <- vv.df$SYMBOL %in% bc_risk_genes
+bc_somatic <- vv.df$SYMBOL %in% bc_somatic_genes
+dna_repair <- vv.df$SYMBOL %in% dna_repair_genes
+es_related <- vv.df$SYMBOL %in% es_related_genes
+
+# Add indices to vv.df
+vv.df <- cbind(vv.df, bc_risk, bc_somatic, dna_repair, es_related)
+x <- c("TP53", "ERCC1")
+x.rows <- vv.df$SYMBOL %in% x
+vv.df[x.rows,c("SYMBOL", "bc_risk", "bc_somatic", "dna_repair", "es_related")]
+rm(x, x.rows)
+
+# Make cumulative index
+priority_genes <- bc_risk | bc_somatic | dna_repair | es_related
+sum(priority_genes) # 4,063
+
+# Clean-up
+rm(bc_risk, bc_somatic, dna_repair, es_related, bc_risk_genes, bc_somatic_genes, dna_repair_genes, es_related_genes, priority_genes_folder)
+  
+```
+
+# make_cumulative_indices
+
+```{r make_cumulative_indices}
+
+strict_set <- lof_all | missense_strict | clinsig_non_benign
+sum(strict_set) # ~7k
+
+standard_set_1 <- lof_all | missense_medium_1 | clinsig_non_benign
+sum(standard_set_1) # ~18k
+
+standard_set_2 <- lof_all | missense_medium_2 | clinsig_non_benign
+sum(standard_set_2) # ~38k
+
+relaxed_set <- lof_all | missense_all | clinsig_non_benign | somatic
+sum(relaxed_set) # ~95k
+
+priority_strict <- strict_set & priority_genes
+sum(priority_strict) # 146
+
+priority_relaxed <- relaxed_set & priority_genes
+sum(priority_relaxed) # 1540
+
+rm(lof_all, missense_strict, missense_medium_1, missense_medium_2, missense_all, clinsig_non_benign, somatic, priority_genes)
+
+```
+
+# filter_variants
+
+```{r filter_variants}
+
+vv.str <- vv.df[strict_set,]
+gt.str <- gt.mx[strict_set,]
+gq.str <- gq.mx[strict_set,]
+dp.str <- dp.mx[strict_set,]
+alt.str <- alt.mx[strict_set,]
+ref.str <- ref.mx[strict_set,]
+
+dim(gt.str)
+dim(vv.str)
+rm(strict_set)
+
+vv.std.1 <- vv.df[standard_set_1,]
+gt.std.1 <- gt.mx[standard_set_1,]
+gq.std.1 <- gq.mx[standard_set_1,]
+dp.std.1 <- dp.mx[standard_set_1,]
+alt.std.1 <- alt.mx[standard_set_1,]
+ref.std.1 <- ref.mx[standard_set_1,]
+
+dim(gt.std.1)
+dim(vv.std.1)
+rm(standard_set_1)
+
+vv.std.2 <- vv.df[standard_set_2,]
+gt.std.2 <- gt.mx[standard_set_2,]
+gq.std.2 <- gq.mx[standard_set_2,]
+dp.std.2 <- dp.mx[standard_set_2,]
+alt.std.2 <- alt.mx[standard_set_2,]
+ref.std.2 <- ref.mx[standard_set_2,]
+
+dim(gt.std.2)
+dim(vv.std.2)
+rm(standard_set_2)
+
+vv.rel <- vv.df[relaxed_set,]
+gt.rel <- gt.mx[relaxed_set,]
+gq.rel <- gq.mx[relaxed_set,]
+dp.rel <- dp.mx[relaxed_set,]
+alt.rel <- alt.mx[relaxed_set,]
+ref.rel <- ref.mx[relaxed_set,]
+
+dim(gt.rel)
+dim(vv.rel)
+rm(relaxed_set)
+
+vv.pri.rel <- vv.df[priority_relaxed,]
+gt.pri.rel <- gt.mx[priority_relaxed,]
+gq.pri.rel <- gq.mx[priority_relaxed,]
+dp.pri.rel <- dp.mx[priority_relaxed,]
+alt.pri.rel <- alt.mx[priority_relaxed,]
+ref.pri.rel <- ref.mx[priority_relaxed,]
+
+dim(gt.pri.rel)
+dim(vv.pri.rel)
+rm(priority_relaxed)
+
+vv.pri.str <- vv.df[priority_strict,]
+gt.pri.str <- gt.mx[priority_strict,]
+gq.pri.str <- gq.mx[priority_strict,]
+dp.pri.str <- dp.mx[priority_strict,]
+alt.pri.str <- alt.mx[priority_strict,]
+ref.pri.str <- ref.mx[priority_strict,]
+
+dim(gt.pri.str)
+dim(vv.pri.str)
+rm(priority_strict)
+
+```
+
+# explore_result
+
+POLG & POLQ are DNA-repair genes, previously not implicated in breast cancer  
+ECT2L is a gene somatically mutated in BC, previously not associated with BC risk  
+WRN is a DNA-repair gene, previously not implicated in breast cancer  
+
+```{r explore_result}
+
+# Explore selected genes 
+# Note that sum of AFs per gene may exceed 1
+
+vv.std.1[vv.std.1$SYMBOL=="NPHP4",c("SYMBOL","AF","AC","AN")]
+vv.std.1[vv.std.1$SYMBOL=="OR4C5",c("SYMBOL","AF","AC","AN")]
+vv.std.1[vv.std.1$SYMBOL=="SARM1",c("SYMBOL","AF","AC","AN")]
+
+vv.pri.str[vv.pri.str$SYMBOL=="ECT2L",c("SYMBOL","AF","AC","AN")]
+vv.pri.str[vv.pri.str$SYMBOL=="POLG",c("SYMBOL","AF","AC","AN")]
+sort(table(as.vector(vv.pri.str$SYMBOL)), decreasing = TRUE)
+
+#View(vv.pri.str[vv.pri.str$SYMBOL=="POLQ",])
+
+```
+
+# save_data
+
+```{r save_data}
+
+interim_data_file <- paste(interim_data_folder, "s04_filter_by_effect_feb2016.RData", sep="/")
+save.image(file=interim_data_file)
+
+```
+
+# final_section
+
+```{r final_section}
+
+sessionInfo()
+Sys.time()
+
+```

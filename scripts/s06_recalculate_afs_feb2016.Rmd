@@ -1,0 +1,445 @@
+---
+title: "Exploring and recalculating AFs<br>additional samples and variants filtering<br>adding AFs for subgtoups: wecare feb2016"
+author: "Alexey Larionov"
+output: html_document
+params:
+  interim_data: ""
+  subset: ""
+---
+
+started: Mar2016
+last updated: 11Aug2016
+
+# Summary
+
+Removes cases with insufficient phenotype annotations  
+Calculates AFs for variants in all cases, in CBC and UBC
+
+# start_section
+
+```{r start_section}
+
+# Start time
+Sys.time()
+
+# Do NOT clean-up at this stage
+#rm(list=ls()) # this would remove params object!
+graphics.off()
+
+# Read parameters
+interim_data_folder <- params$interim_data
+data_subset <- params$subset
+
+library(dplyr) # for piping, filter, select etc
+
+# For debugging
+#rm(list=ls())
+#interim_data_folder <- "/scratch/medgen/users/alexey/wecare_aug2016/interim_data"
+#data_subset <- "priority_genes_strict"
+#setwd("/scratch/medgen/scripts/wecare_skat_08.16/scripts")
+
+# Check subset
+if (! data_subset %in% c("strict", "std.1", "std.2", "relaxed", "priority_genes_relaxed", "priority_genes_strict", "all_variants")){
+  print("Wrong data subset")
+  stop
+}
+
+```
+
+# load_and_check_data
+
+```{r load_and_check_data}
+
+# Select data for the subset
+
+if(data_subset == "strict"){
+  source_data_file <- paste(interim_data_folder, "s05_reshape_str_feb2016.RData", sep="/")
+}
+
+if(data_subset == "std.1"){
+  source_data_file <- paste(interim_data_folder, "s05_reshape_std1_feb2016.RData", sep="/")
+}
+
+if(data_subset == "std.2"){
+  source_data_file <- paste(interim_data_folder, "s05_reshape_std2_feb2016.RData", sep="/")
+}
+
+if(data_subset == "relaxed"){
+  source_data_file <- paste(interim_data_folder, "s05_reshape_rel_feb2016.RData", sep="/")
+}
+
+if(data_subset == "priority_genes_relaxed"){
+  source_data_file <- paste(interim_data_folder, "s05_reshape_pri_rel_feb2016.RData", sep="/")
+}
+
+if(data_subset == "priority_genes_strict"){
+  source_data_file <- paste(interim_data_folder, "s05_reshape_pri_str_feb2016.RData", sep="/")
+}
+
+if(data_subset == "all_variants"){
+  source_data_file <- paste(interim_data_folder, "s05_reshape_all_feb2016.RData", sep="/")
+}
+
+data_subset
+source_data_file
+
+# Remove params object to avoid interference with load() function
+rm(params)
+
+load(file=source_data_file)
+
+# Remove irrelevant data files from the previous step
+rm(source_data_file, interim_data_file)
+
+ls()
+
+dim(genotypes.mx)
+class(genotypes.mx)
+genotypes.mx[1:25,1:5]
+
+dim(phenotypes.df)
+colnames(phenotypes.df)
+phenotypes.df[1:5,1:5]
+
+dim(variants.df)
+colnames(variants.df)
+variants.df[1:5,1:5]
+
+# check consistency of samples in genotypes and phenotypes
+genotype_samples <- colnames(genotypes.mx)
+length(genotype_samples)
+
+all_phenotype_samples <- 
+  phenotypes.df %>% select(wes_id)
+all_phenotype_samples <- as.vector(all_phenotype_samples[,1])
+length(all_phenotype_samples)
+
+pass_phenotype_samples<- 
+  phenotypes.df %>% filter(filter=="pass") %>% select(wes_id)
+pass_phenotype_samples <- as.vector(pass_phenotype_samples[,1])
+length(pass_phenotype_samples)
+
+sum( genotype_samples %in% all_phenotype_samples )
+sum( genotype_samples %in% pass_phenotype_samples )
+
+rm(genotype_samples, all_phenotype_samples)
+
+# check consistency of variants in genotypes and variants
+sum(rownames(genotypes.mx) != variants.df$VarID )
+
+```
+
+# add_rownames_and_remove_failed_cases
+
+```{r add_rownames_and_remove_failed_cases}
+
+genotypes.mx <- genotypes.mx[,pass_phenotype_samples]
+dim(genotypes.mx)
+
+rownames(phenotypes.df) <- phenotypes.df$wes_id
+phenotypes.df <- phenotypes.df[pass_phenotype_samples,]
+dim(phenotypes.df)
+
+rownames(variants.df) <- variants.df$VarID
+
+rm(pass_phenotype_samples)
+
+```
+
+# explore_AF_AN_and_AC_in_whole_dataset
+
+```{r explore_AF_AN_and_AC_in_whole_dataset}
+
+# Explore AF, AC and AN values reported in vcf file
+hist(variants.df$AF, breaks=seq(0, 1, 0.01))
+hist(variants.df$AC, breaks=seq(0, 1030, 10))
+hist(variants.df$AN, ylim=c(0,20000), labels=TRUE)
+
+```
+
+# recalculate_AF_AN_and_AC_in_whole_dataset
+
+AC - number of detected alt alleles  
+AN - number of detected alleles  
+AF - alt allele fraction = AC / AN  
+
+```{r recalculate_AF_AN_and_AC_in_whole_dataset}
+
+# Function to calculate AN from genotypes
+AN.fn <- function(x) 2*sum(!is.na(x))
+
+# Calculate AF, AC and AN from genotypes
+AC_GT <- apply(genotypes.mx, 1, sum, na.rm=TRUE)
+AN_GT <- apply(genotypes.mx, 1, AN.fn)
+AF_GT <- AC_GT / AN_GT
+
+# Compare AF, AC and AN calculated from genotypes 
+# with AF, AC and AN  values reported in vcf
+
+plot(variants.df$AC, AC_GT, main="AC: vcf vs. genotypes")
+abline(0,1,col="red")
+# In most cases AC from genotypes is below than from vcf
+# This is consistent with removal of some genotypes and whole cases during filtering
+
+plot(variants.df$AN, AN_GT, 
+     xlim=c(0,1000), ylim=c(0,1000), 
+     main="AN: vcf vs. genotypes (range 0-1000)")
+abline(0,1,col="red") 
+# AN from genotypes is always smaller than from vcf
+# No cases with low AN because of the call-rate filter 
+# and other filters applied earlier
+
+plot(variants.df$AN, AN_GT, 
+     main="AN: vcf vs. genotypes")
+abline(0,1,col="red") 
+
+plot(variants.df$AF, AF_GT, main="AF: vcf vs. genotypes") 
+abline(0,1,col="red") 
+# The AFs are concordant, except for some variants, 
+# which will be removed below
+
+# Add gt AF_GT, AN_GT, AC_GT to variants.df
+variants.df <- cbind(variants.df, AF_GT, AC_GT, AN_GT)
+hist(variants.df$AF_GT, breaks=seq(0, 1, 0.01))
+hist(variants.df$AC_GT, breaks=seq(0, 1030, 10))
+hist(variants.df$AN_GT, labels=TRUE)
+
+# Clean-up
+rm(AF_GT, AC_GT, AN_GT)
+
+```
+
+# exclude_variants_with_zero_AF_after_filtering
+
+```{r exclude_variants_with_zero_AF_after_filtering}
+
+variants_to_exclude <- variants.df$AF_GT == 0
+sum(variants_to_exclude)
+
+genotypes.mx <- genotypes.mx[ !variants_to_exclude, ]
+dim(genotypes.mx)
+
+variants.df <- variants.df[ !variants_to_exclude, ]
+dim(variants.df)
+
+rm(variants_to_exclude)
+
+```
+
+# exclude_variants_with_discordant_AF_vs_AC_AN
+Is this needed ?
+
+```{r exclude_variants_with_discordant_AF_vs_AF-GT}
+
+# Variants with discrepancies between AF estimates in VCF file
+variants_to_exclude <- 
+  variants.df$AF_GT - variants.df$AF > 0.01 | 
+  variants.df$AF_GT - variants.df$AF < -0.01
+sum(variants_to_exclude)
+
+table(as.vector(variants.df[variants_to_exclude, "SYMBOL"]))
+
+# The highest 3 discrepancies
+as.vector(variants.df[variants.df$AF_GT - variants.df$AF > 0.05, "SYMBOL"])
+as.vector(variants.df[variants.df$AF_GT - variants.df$AF < -0.05, "SYMBOL"])
+
+# Exclude variants with discrepancies
+genotypes.mx <- genotypes.mx[ !variants_to_exclude, ]
+dim(genotypes.mx)
+
+variants.df <- variants.df[ !variants_to_exclude, ]
+dim(variants.df)
+
+rm(variants_to_exclude)
+
+```
+
+# Calculate AFs for Contralateral BC (CBC, cases)
+
+```{r calculate_cbc_afs}
+
+# Select cbc cases
+# 1=Case, 0=Control (Confirmed by DC in e-mail to EF of 29-30Mar2016)
+cbc.idx <- phenotypes.df$cc == 1 
+sum(cbc.idx)
+
+gt.cbc.df <- genotypes.mx[,cbc.idx]
+dim(gt.cbc.df)
+
+# Calculate AF, AC and AN from genotypes
+AC_CBC <- apply(gt.cbc.df, 1, sum, na.rm=TRUE)
+AN_CBC <- apply(gt.cbc.df, 1, AN.fn)
+AF_CBC <- AC_CBC / AN_CBC
+hist(AF_CBC, breaks=seq(0,1,0.01))
+
+variants.df <- cbind(variants.df, AF_CBC, AC_CBC, AN_CBC)
+rm(gt.cbc.df, cbc.idx, AF_CBC, AC_CBC, AN_CBC)
+
+```
+
+# Calculate AFs for Unilateral BC (UBC, controls)
+
+```{r calculate_ubc_afs}
+
+# Select cbc cases
+# 1=Case, 0=Control (Confirmed by DC in e-mail to EF of 29-30Mar2016)
+ubc.idx <- phenotypes.df$cc == 0 
+sum(ubc.idx)
+
+gt.ubc.df <- genotypes.mx[,ubc.idx]
+dim(gt.ubc.df)
+
+# Calculate AF, AC and AN from genotypes
+AC_UBC <- apply(gt.ubc.df, 1, sum, na.rm=TRUE)
+AN_UBC <- apply(gt.ubc.df, 1, AN.fn)
+AF_UBC <- AC_UBC / AN_UBC
+hist(AF_UBC, breaks=seq(0,1,0.01))
+
+variants.df <- cbind(variants.df, AF_UBC, AC_UBC, AN_UBC)
+rm(gt.ubc.df, ubc.idx, AF_UBC, AC_UBC, AN_UBC)
+
+```
+
+# Calculate AFs for Unilateral Sporadic UBC (USBC)
+
+```{r calculate_usbc_afs}
+
+# Select usbc cases
+# coding: 1=Case/Familial, 0=Control/Sporadic 
+#(Confirmed by DC in e-mail to EF of 29-30Mar2016)
+ubc.idx <- phenotypes.df$cc == 0 
+sum(ubc.idx)
+
+sum(is.na(phenotypes.df$family_history))
+not.na.fam_hist <- ! is.na(phenotypes.df$family_history)
+
+sbc.idx <- phenotypes.df$family_history == 0 & not.na.fam_hist
+sum(sbc.idx)
+
+usbc.idx <- ubc.idx & sbc.idx
+sum(usbc.idx)
+
+#View(phenotypes.df[usbc.idx, c("cc","family_history")])
+sum(phenotypes.df[usbc.idx, c("cc","family_history")])
+
+gt.usbc.df <- genotypes.mx[,usbc.idx]
+dim(gt.usbc.df)
+
+# Calculate AF, AC and AN from genotypes
+AC_USBC <- apply(gt.usbc.df, 1, sum, na.rm=TRUE)
+AN_USBC <- apply(gt.usbc.df, 1, AN.fn)
+AF_USBC <- AC_USBC / AN_USBC
+hist(AF_USBC, breaks=seq(0,1,0.01))
+
+variants.df <- cbind(variants.df, AF_USBC, AC_USBC, AN_USBC)
+rm(not.na.fam_hist, gt.usbc.df, ubc.idx, sbc.idx, usbc.idx, AF_USBC, AC_USBC, AN_USBC)
+
+```
+
+# Calculate AFs for Bilateral Familial BC (CFBC)
+
+```{r calculate_cfbc_afs}
+
+# Select cfbc cases
+# coding: 1=Case/Familial, 0=Control/Sporadic 
+#(Confirmed by DC in e-mail to EF of 29-30Mar2016)
+cbc.idx <- phenotypes.df$cc == 1 
+sum(cbc.idx)
+
+sum(is.na(phenotypes.df$family_history))
+not.na.fam_hist <- ! is.na(phenotypes.df$family_history)
+
+fbc.idx <- phenotypes.df$family_history == 1 & not.na.fam_hist
+sum(fbc.idx)
+
+cfbc.idx <- cbc.idx & fbc.idx
+sum(cfbc.idx)
+
+#View(phenotypes.df[cfbc.idx,c("cc","family_history")])
+sum(phenotypes.df[cfbc.idx,c("cc","family_history")])
+
+gt.cfbc.df <- genotypes.mx[,cfbc.idx[!is.na(cfbc.idx)]]
+dim(gt.cfbc.df)
+
+# Calculate AF, AC and AN from genotypes
+AC_CFBC <- apply(gt.cfbc.df, 1, sum, na.rm=TRUE)
+AN_CFBC <- apply(gt.cfbc.df, 1, AN.fn)
+AF_CFBC <- AC_CFBC / AN_CFBC
+hist(AF_CFBC, breaks=seq(0,1,0.01))
+
+variants.df <- cbind(variants.df, AF_CFBC, AC_CFBC, AN_CFBC)
+rm(not.na.fam_hist, gt.cfbc.df, cbc.idx, fbc.idx, cfbc.idx, AF_CFBC, AC_CFBC, AN_CFBC, AN.fn)
+
+```
+
+# explore_data_after_additional_filtering
+
+```{r explore_afs}
+
+# explore_AF-GT_AC-GT_AN-GT
+
+hist(variants.df$AF_GT, breaks=seq(0, 1, 0.01))
+hist(variants.df$AC_GT, breaks=seq(0, 1030, 10))
+hist(variants.df$AN_GT, labels=TRUE)
+
+plot(variants.df$AF, variants.df$AF_GT, main="Corrected AF: vcf vs. genotypes") 
+abline(0,1,col="red") 
+# The AFs concordance has improved, especially in rare variants
+
+# Retained genes
+sort(table(as.vector(variants.df[, "SYMBOL"])), decreasing = TRUE)
+
+# Explore POLG (dna repair gene not linked to BC earlier)
+variants.df[variants.df$SYMBOL == "POLG", c("VarID", "SYMBOL", "Consequence", "CLIN_SIG", "SIFT_call", "PolyPhen_call")]
+apply(variants.df[variants.df$SYMBOL == "POLG", c("GMAF_Fraction", "EUR_MAF_Fraction", "AF_UBC", "AF_CBC")], 2, sum, na.rm=TRUE)
+
+# Explore WRN (dna repair gene not linked to BC earlier)
+variants.df[variants.df$SYMBOL == "WRN",c("VarID","SYMBOL","Consequence","CLIN_SIG", "SIFT_call", "PolyPhen_call")]
+apply(variants.df[variants.df$SYMBOL == "WRN",c("GMAF_Fraction", "EUR_MAF_Fraction", "AF_UBC", "AF_CBC")],2,sum, na.rm=TRUE)
+
+```
+
+# save_data
+
+```{r save_data}
+
+if(data_subset == "strict"){
+  interim_data_file <- paste(interim_data_folder, "s06_recalculate_afs_str_feb2016.RData", sep="/")
+}
+
+if(data_subset == "std.1"){
+  interim_data_file <- paste(interim_data_folder, "s06_recalculate_afs_std1_feb2016.RData", sep="/")
+}
+
+if(data_subset == "std.2"){
+  interim_data_file <- paste(interim_data_folder, "s06_recalculate_afs_std2_feb2016.RData", sep="/")
+}
+
+if(data_subset == "relaxed"){
+  interim_data_file <- paste(interim_data_folder, "s06_recalculate_afs_rel_feb2016.RData", sep="/")
+}
+
+if(data_subset == "priority_genes_relaxed"){
+  interim_data_file <- paste(interim_data_folder, "s06_recalculate_afs_pri_rel_feb2016.RData", sep="/")
+}
+
+if(data_subset == "priority_genes_strict"){
+  interim_data_file <- paste(interim_data_folder, "s06_recalculate_afs_pri_str_feb2016.RData", sep="/")
+}
+
+if(data_subset == "all_variants"){
+  interim_data_file <- paste(interim_data_folder, "s06_recalculate_afs_all_feb2016.RData", sep="/")
+}
+
+save.image(file=interim_data_file)
+
+```
+
+# final_section
+
+```{r final_section}
+
+sessionInfo()
+Sys.time()
+
+```

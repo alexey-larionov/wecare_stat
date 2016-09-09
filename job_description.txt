@@ -1,0 +1,63 @@
+wecare stat analysis
+
+time: 01:00:00
+start_script: a01_wecare_stat_pipeline_slurm.sh
+scripts_folder: /scratch/medgen/scripts/wecare_stat_09.16/scripts
+
+project_folder: /scratch/medgen/users/alexey/wecare_stat_sep2016
+
+prefix: IGP_L1_vqsr_shf_sma_ann
+steps: filter_genotypes
+
+read_data
+filter_genotypes
+filter_by_effect
+reshape_data
+recalculate_afs
+variants_glm
+genes_skat
+groups_skat
+
+r_libs_folder: /scratch/medgen/tools/r/R-3.2.2/lib64/R/library
+r_bin_folder: /scratch/medgen/tools/r/R-3.2.2/bin
+
+# ----- Thresholds for GENOTYPES filtering ----- #
+
+# removes ~10% of genotypes:
+# 5% scattered everywere and
+# 5% of them concentrated in "bad" variants.  
+# These "bad" variants are subsequently removed by the call rate threshold.
+
+min_dp: 10
+max_dp: 500
+min_gq: 20
+
+# The hets filter could be "probability" or "fraction"
+hets_filter_type: probability
+hets_filter_threshold: 0.05
+
+#hets_filter_type: fraction
+#hets_filter_threshold: 0.35
+
+# FRMA = fraction of reads supporting minor allele
+homs_max_frma: 0.05
+
+# ----- Threshold for final VARIANTS filtering ----- #
+
+# Min call rate per variant
+min_call_rate: 0.8
+
+# ----- Other settings ----- #
+
+data_subset: priority_genes_relaxed
+
+Allowed subsets:
+strict
+std.1
+std.2
+relaxed
+priority_genes_strict
+priority_genes_relaxed
+all_variants
+
+gene_groups: dna_repair,bc_risk,bc_somatic,es_related

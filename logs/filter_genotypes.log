@@ -1,0 +1,188 @@
+Job id: 3467165
+Job name: wecare_stat_pipeline
+Allocated node: sand-1-62
+Initial working folder:
+/scratch/medgen/scripts/wecare_stat_09.16
+
+ ------------------ Output ------------------ 
+
+Started pipeline: 08Sep2016_20:05:30
+
+ ----- Job settings ----- 
+
+scripts_folder: /scratch/medgen/scripts/wecare_stat_09.16/scripts
+project_folder: /scratch/medgen/users/alexey/wecare_stat_sep2016
+source_data_folder: /scratch/medgen/users/alexey/wecare_stat_sep2016/source_data
+prefix: IGP_L1_vqsr_shf_sma_ann
+steps: steps: filter_genotypes
+interim_data_folder: /scratch/medgen/users/alexey/wecare_stat_sep2016/interim_data
+priority_genes_folder: /scratch/medgen/users/alexey/wecare_stat_sep2016/gene_lists
+results_folder: /scratch/medgen/users/alexey/wecare_stat_sep2016/results
+logs_folder: /scratch/medgen/users/alexey/wecare_stat_sep2016/logs
+r_libs_folder: /scratch/medgen/tools/r/R-3.2.2/lib64/R/library
+r_bin_folder: /scratch/medgen/tools/r/R-3.2.2/bin
+r: /scratch/medgen/tools/r/R-3.2.2/bin/R
+
+min_dp: 10
+max_dp: 500
+min_gq: 20
+hets_filter_type: probability
+hets_filter_threshold: 0.05
+homs_max_frma: 0.05
+
+min_call_rate: 0.8
+
+data_subset: priority_genes_relaxed
+gene_groups: dna_repair,bc_risk,bc_somatic,es_related
+
+ ------------------------ 
+Started reading data: 08Sep2016_20:05:30
+Completed reading data: 08Sep2016_20:05:30
+
+ ------------------------ 
+
+Started filtering genotypes: 08Sep2016_20:05:30
+
+R version 3.2.2 (2015-08-14) -- "Fire Safety"
+Copyright (C) 2015 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> library('rmarkdown', lib='/scratch/medgen/tools/r/R-3.2.2/lib64/R/library/'); render('/scratch/medgen/scripts/wecare_stat_09.16/scripts/s02_filter_genotypes_sep2016.Rmd', params=list(interim_data='/scratch/medgen/users/alexey/wecare_stat_sep2016/interim_data', min_dp='10', max_dp='500', min_gq='20', hets_filter_type='probability', hets_filter_threshold='0.05', homs_max_frma='0.05', min_call_rate='0.8'), output_file='/scratch/medgen/users/alexey/wecare_stat_sep2016/logs/s02_filter_genotypes_sep2016.html')
+
+
+processing file: s02_filter_genotypes_sep2016.Rmd
+  |                                                                         |                                                                 |   0%  |                                                                         |..                                                               |   3%
+  ordinary text without R code
+
+  |                                                                         |....                                                             |   6%
+label: start_section
+  |                                                                         |......                                                           |  10%
+  ordinary text without R code
+
+  |                                                                         |........                                                         |  13%
+label: filtering_settings
+  |                                                                         |..........                                                       |  16%
+  ordinary text without R code
+
+  |                                                                         |.............                                                    |  19%
+label: load_and_check_data
+  |                                                                         |...............                                                  |  23%
+  ordinary text without R code
+
+  |                                                                         |.................                                                |  26%
+label: convert_data_frames_to_matrices
+  |                                                                         |...................                                              |  29%
+  ordinary text without R code
+
+  |                                                                         |.....................                                            |  32%
+label: convert_ref_alt_matrices_to_numeric
+  |                                                                         |.......................                                          |  35%
+  ordinary text without R code
+
+  |                                                                         |.........................                                        |  39%
+label: histograms_before_filtering
+  |                                                                         |...........................                                      |  42%
+  ordinary text without R code
+
+  |                                                                         |.............................                                    |  45%
+label: filter_by_gq
+  |                                                                         |...............................                                  |  48%
+  ordinary text without R code
+
+  |                                                                         |..................................                               |  52%
+label: filter_by_dp
+  |                                                                         |....................................                             |  55%
+  ordinary text without R code
+
+  |                                                                         |......................................                           |  58%
+label: filter_by_discrepancies_between_ref_plus_alt_and_dp
+  |                                                                         |........................................                         |  61%
+  ordinary text without R code
+
+  |                                                                         |..........................................                       |  65%
+label: filter_heterozigous_genotypes_by_crma
+  |                                                                         |............................................                     |  68%
+  ordinary text without R code
+
+  |                                                                         |..............................................                   |  71%
+label: filter_homozygous_genotypes_by_crma
+  |                                                                         |................................................                 |  74%
+  ordinary text without R code
+
+  |                                                                         |..................................................               |  77%
+label: filter_variants_by_final_call_rate
+  |                                                                         |....................................................             |  81%
+  ordinary text without R code
+
+  |                                                                         |.......................................................          |  84%
+label: histograms_after_filtering
+  |                                                                         |.........................................................        |  87%
+  ordinary text without R code
+
+  |                                                                         |...........................................................      |  90%
+label: save_data
+  |                                                                         |.............................................................    |  94%
+  ordinary text without R code
+
+  |                                                                         |...............................................................  |  97%
+label: final_section
+  |                                                                         |.................................................................| 100%
+  ordinary text without R code
+
+
+output file: s02_filter_genotypes_sep2016.knit.md
+
+/usr/local/Cluster-Apps/pandoc/1.15.2.1/bin/pandoc +RTS -K512m -RTS s02_filter_genotypes_sep2016.utf8.md --to html --from markdown+autolink_bare_uris+ascii_identifiers+tex_math_single_backslash-implicit_figures --output /scratch/medgen/users/alexey/wecare_stat_sep2016/logs/s02_filter_genotypes_sep2016.html --smart --email-obfuscation none --self-contained --standalone --section-divs --template /scratch/medgen/tools/r/R-3.2.2/lib64/R/library/rmarkdown/rmd/h/default.html --variable 'theme:bootstrap' --include-in-header /tmp/RtmpgP4wo7/rmarkdown-str4ff35026b4c4.html --mathjax --variable 'mathjax-url:https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML' --no-highlight --variable highlightjs=/scratch/medgen/tools/r/R-3.2.2/lib64/R/library/rmarkdown/rmd/h/highlight 
+
+Output created: /scratch/medgen/users/alexey/wecare_stat_sep2016/logs/s02_filter_genotypes_sep2016.html
+> 
+> 
+Completed filtering genotypes: 08Sep2016_20:05:51
+
+ ------------------------ 
+
+Started filtering by effect: 08Sep2016_20:05:51
+Completed filtering by effect: 08Sep2016_20:05:51
+
+ ------------------------ 
+
+Started reshaping data: 08Sep2016_20:05:51
+Completed reshaping data: 08Sep2016_20:05:51
+
+ ------------------------ 
+
+Started calculating afs: 08Sep2016_20:05:51
+Completed calculating afs: 08Sep2016_20:05:51
+
+ ------------------------ 
+
+Started calculating variants glm: 08Sep2016_20:05:51
+Completed calculating variants glm: 08Sep2016_20:05:51
+
+ ------------------------ 
+
+Started calculating genes skat: 08Sep2016_20:05:51
+Completed calculating genes skat: 08Sep2016_20:05:51
+
+ ------------------------ 
+
+Started calculating gene groups skat: 08Sep2016_20:05:51
+Completed calculating groups skat: 08Sep2016_20:05:51
+
+ ------------------------ 
+
+Completed pipeline: 08Sep2016_20:05:51

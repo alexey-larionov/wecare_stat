@@ -14,23 +14,24 @@ params:
 ---
 
 started: 01Mar2016  
-last updated: 08Sep2016
+last updated: 09Sep2016
 
 # Notes 
 
-In addition to the genotype filtering this script converts some dataframes
-to numeric matrices. 
+The main two genotype filters are DP and GQ.  In principle, they are sufficient for genotype filtering. 
+Thresholds for min DP and GQ were set to 10 and 20 because they are commonly used (e.g. see Carson BMC Bioinformatics). 2014 15:125). 
+
+In addition to the genotype filtering this script:
+1) removes variants with low call rate after genotype filtering: it could be up to 10-20% of variants.  In the retained variants  
+2) converts some dataframes to numeric matrices. 
+
+A small number of genotypes (<<1%) was covered too high to be true (up to 1-2k coverage).
+These are obvious mistakes, and they have been removed too.  Arbitrarily the threshold for
+max DP was set to 500 (appr. 10 fold of average coverage).
 
 It was discussed with DC whether to filter cases by call rate per case. 
 There was ~3 cases with low coverage (<20) and low call rates (<50%). 
 We desided to keep such cases because their retained genotypes still passed all filters. 
-
-Thresholds for min DP and GQ were set to 10 and 20 because they are commonly used 
-(e.g. see Carson BMC Bioinformatics 2014 15:125). 
-
-A small number of genotypes (~0.01%) was covered too high to be true (up to 1-2k coverage).
-These are obvious mistakes, and they have been removed too.  Arbitrarily the threshold for
-max DP was set to 500 (appr. 10 fold of average coverage).
 
 # start_section
 
@@ -519,7 +520,7 @@ ref.mx <- ref.mx[ var.retained, ]
 vv.df <- vv.df[ var.retained, ]
 kgen.df <- kgen.df[ var.retained, ]
 exac.df <- exac.df[ var.retained, ]
-rm(var.retained, vv.df)
+rm(var.retained)
 
 # Call rates per variant after filtering by call rate
 x <- ncol(gt.mx)

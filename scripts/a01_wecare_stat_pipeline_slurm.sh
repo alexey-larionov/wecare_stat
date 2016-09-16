@@ -2,7 +2,7 @@
 
 # skat_pipeline_slurm.sh
 # Run skat pipeline for wecare dataset
-# Alexey Larionov, 08Sep2016
+# Alexey Larionov, 12Sep2016
 # Use: sbatch stat_pipeline_slurm.sh job_description.txt
 
 # ---------------------------------------- #
@@ -17,9 +17,9 @@
 #SBATCH --no-requeue
 #SBATCH -p sandybridge
 
-#SBATCH --time=01:00:00
-#SBATCH --qos=INTR
-#SBATCH --output filter_genotypes.log
+##SBATCH --time=01:00:00
+##SBATCH --qos=INTR
+##SBATCH --output read_data.log
 
 # Stop on errors
 set -e
@@ -112,6 +112,12 @@ echo "data_subset: ${data_subset}" # e.g. priority_genes_strict
 echo "gene_groups: ${gene_groups}" # Can be "dna_repair,bc_risk,bc_somatic,es_related"
 echo ""
 echo " ------------------------ "
+
+#--------------------------------------------------#
+#            Copy source data from NAS             #
+#--------------------------------------------------#
+
+# TBD
 
 #--------------------------------------------------#
 #                  Read source data                #

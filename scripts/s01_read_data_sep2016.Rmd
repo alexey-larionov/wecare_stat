@@ -5,11 +5,11 @@ output: html_document
 params:
   source_data: "/scratch/medgen/users/alexey/wecare_stat_sep2016/source_data"
   interim_data: "/scratch/medgen/users/alexey/wecare_stat_sep2016/interim_data"
-  prefix: "IGP_L1_vqsr_shf_sma_ann"
+  prefix: "wes04_sep2016_vqsr_shf_sma_ann"
 ---
 
 started: 01Mar2016  
-last updated: 08Sep2016
+last updated: 12Sep2016
 
 # start_section
 
@@ -33,11 +33,14 @@ library(ggplot2)
 # For debugging
 #source_data_folder <- "/scratch/medgen/users/alexey/wecare_aug2016/source_data"
 #interim_data_folder <- "/scratch/medgen/users/alexey/wecare_aug2016/interim_data"
+#prefix <- "wes04_sep2016_vqsr_shf_sma_ann"
 #setwd("/scratch/medgen/scripts/wecare_skat_08.16/scripts")
 
 ```
 
 # read_data
+
+Use additive genotypes
 
 ```{r read_data}
 
@@ -56,7 +59,7 @@ gq_file <- paste(source_data_folder, "/", prefix, "_GQ.txt", sep="")
 dp_file <- paste(source_data_folder, "/", prefix, "_DP.txt", sep="")
 ad_file <- paste(source_data_folder, "/", prefix, "_AD.txt", sep="")
 
-# Read 
+# Read data
 covar.df <- read.table(covar_file, sep="\t", header=TRUE, quote="")
 demographics.df <- read.table(demographics_file, sep="\t", header=TRUE, quote="")
 samples.df <- read.table(samples_file, sep="\t", header=TRUE, quote="")
@@ -74,7 +77,9 @@ gq.df <- read.table(gq_file, header=TRUE, row.names=1, sep="\t", quote="")
 dp.df <- read.table(dp_file, header=TRUE, row.names=1, sep="\t", quote="")
 ad.df <- read.table(ad_file, header=TRUE, row.names=1, sep="\t", quote="")
 
-rm(source_data_folder, covar_file, demographics_file, samples_file, vv_file, gt_file, gq_file, dp_file, ad_file)
+# Clean-up
+
+rm(source_data_folder, covar_file, demographics_file, samples_file, vv_file, gt_file, gq_file, dp_file, ad_file, kgen_file, exac_file)
 
 ```
 
@@ -124,36 +129,6 @@ ad.df[1:15,1:5]
 
 ```
 
-# data checks: explore_age
-Inclusion criteria: age at 1st Ds < 55
-
-```{r explore_age}
-
-ggplot(covar.df, aes(sub_dx_age)) +
-  geom_histogram(binwidth = 5, colour="black", alpha=0.25) + 
-  aes(fill=as.factor(cc)) +
-  ggtitle("Age at the 1st diagnosis in cases and controls")
-
-```
-
-# data checks: explore_time_to_2nd_ca
-Inclusion criteria: 2nd Ds should be 1yr+ later than the 1st Ds
-There are two fields that look appropriate ...
-
-```{r explore_time_to_2nd_ca}
-
-ggplot(covar.df, aes(offset)) +
-  geom_histogram(breaks=c(0:8), right=FALSE, colour="black", alpha=0.25) + 
-  aes(fill=as.factor(cc)) +
-  ggtitle("covar: offset")
-
-ggplot(demographics.df[c(-59, -502,-503,-504,-505),], aes(rstime)) +
-  geom_histogram(breaks=c(0:8), right=FALSE, colour="black", alpha=0.25) + 
-  aes(fill=as.factor(cc.y)) +
-  ggtitle("demographics: rstime")
-
-```
-
 # split_ad_table
 
 ```{r split_ad_table}
@@ -196,8 +171,7 @@ rm(ad.mx)
 
 ```{r save_data}
 
-interim_data_file <- paste(interim_data_folder, "s01_read_data.RData", sep="/")
-save.image(file=interim_data_file)
+save.image(paste(interim_data_folder, "/", "s01_read_data", prefix, ".RData", sep=""))
 
 ```
 

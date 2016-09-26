@@ -4,22 +4,24 @@ author: "Alexey Larionov"
 output: html_document
 params:
   interim_data: "/scratch/medgen/users/alexey/wecare_stat_sep2016/interim_data"
+  prefix: "wes04_sep2016_vqsr_shf_sma_ann"
   min_dp: "10"
   max_dp: "500"
   min_gq: "20"
-  hets_filter_type: "probability"
-  hets_filter_threshold: "0.05"
-  homs_max_frma: "0.05"
+  hets_min_p: "0.05"
+  homs_min_support: "0.95"
   min_call_rate: "0.8"
 ---
 
 started: 01Mar2016  
-last updated: 09Sep2016
+last updated: 22Sep2016
 
 # Notes 
 
-The main two genotype filters are DP and GQ.  In principle, they are sufficient for genotype filtering. 
-Thresholds for min DP and GQ were set to 10 and 20 because they are commonly used (e.g. see Carson BMC Bioinformatics). 2014 15:125). 
+The main two genotype filters are DP and GQ.  In principle, they are sufficient for genotype filtering. Thresholds for min DP and GQ were set to 10 and 20 because they are commonly used (e.g. see Carson BMC Bioinformatics). 2014 15:125). Genotypes with spuriously high DP (10x of average)
+were also removed. 
+
+Also I added filters for homozygous (>95% reads supporting called allele) and heterozygous (reads split p<5%) genotypes, as well as concordance of AD and sum of Ref+Alt
 
 In addition to the genotype filtering this script:
 1) removes variants with low call rate after genotype filtering: it could be up to 10-20% of variants.  In the retained variants  
@@ -44,18 +46,9 @@ Sys.time()
 #rm(list=ls()) # this would remove params object!
 graphics.off()
 
-# Data folder
+# Data folder and file
 interim_data_folder <- params$interim_data
-
-# For debugging
-#interim_data_folder <- "/scratch/medgen/users/alexey/wecare_aug2016/interim_data"
-#setwd("/scratch/medgen/scripts/wecare_skat_08.16/scripts")
-
-```
-
-# filtering_settings
-
-```{r filtering_settings}
+prefix <- params$prefix
 
 # Set thresholds for cumulative reads depth and genotype quality
 min.dp <- as.numeric(params$min_dp) # e.g. 10
@@ -63,11 +56,10 @@ max.dp <- as.numeric(params$max_dp) # e.g. 500
 min.gq <- as.numeric(params$min_gq) # e.g. 20
 
 # Filer for heterozygous calls
-hets.filter.type <- params$hets_filter_type # "probability" or "fraction"
-hets.filter.threshold <- as.numeric(params$hets_filter_threshold) # e.g.0.05 (p) or 0.35 (fraction)
+hets.min.p <- as.numeric(params$hets_min_p) # e.g.0.05
 
 # Filer for homozigous calls
-homs.max.frma <- as.numeric(params$homs_max_frma) # e.g. 0.05
+homs.min.support <- as.numeric(params$homs_min_support) # e.g. 0.05
 
 # Call rate filter
 min.call.rate <- as.numeric(params$min_call_rate) # e.g. 0.8
@@ -77,8 +69,8 @@ min.call.rate <- as.numeric(params$min_call_rate) # e.g. 0.8
 #max.dp <- 500
 #min.gq <- 20
 #hets.filter.type <- "probability"
-#hets.filter.threshold <- 0.05
-#homs.max.frma <- 0.05
+#hets.min.p <- 0.05
+#homs.min.support <- 0.05
 #min.call.rate <- 0.8
 
 ```
@@ -90,7 +82,7 @@ min.call.rate <- as.numeric(params$min_call_rate) # e.g. 0.8
 # Remove params object to avoid interference with load() function
 rm(params)
 
-interim_data_file <- paste(interim_data_folder, "s01_read_data.RData", sep="/")
+interim_data_file <- paste(interim_data_folder, "/", "s01_read_data_", prefix, ".RData", sep="")
 load(file=interim_data_file)
 ls()
 
@@ -118,10 +110,6 @@ dim(exac.df)
 str(exac.df)
 exac.df[1:5,1:5]
 
-dim(vv.df)
-str(vv.df)
-vv.df[1:5,1:5]
-
 dim(gt.df)
 str(gt.df, list.len=5)
 gt.df[1:5,1:5]
@@ -144,11 +132,12 @@ alt.mx[1:15,1:5]
 
 # Check consistence of rownames
 sum(rownames(gt.df) != rownames(vv.df), na.rm=TRUE)
-
 sum(rownames(gt.df) != rownames(gq.df), na.rm=TRUE)
 sum(rownames(gt.df) != rownames(dp.df), na.rm=TRUE)
 sum(rownames(gt.df) != rownames(ref.mx), na.rm=TRUE)
 sum(rownames(gt.df) != rownames(alt.mx), na.rm=TRUE)
+sum(rownames(gt.df) != rownames(kgen.df), na.rm=TRUE)
+sum(rownames(gt.df) != rownames(exac.df), na.rm=TRUE)
 
 # Check consistence of colnames (sub(".DP","") may be used instead)
 sum(substr(colnames(gt.df),0,6) != substr(colnames(gq.df),0,6), na.rm=TRUE)
@@ -165,6 +154,7 @@ sum(substr(colnames(gt.df),0,6) != substr(colnames(alt.mx),0,6), na.rm=TRUE)
 gt.mx <- as.matrix(gt.df)
 gq.mx <- as.matrix(gq.df)
 dp.mx <- as.matrix(dp.df)
+
 rm(gt.df, gq.df, dp.df)
 
 dim(gt.mx)
@@ -215,7 +205,7 @@ rm(ref.alt.rownames, ref.alt.colnames)
 # Total num of NAs before genotype filtering
 sum(is.na(gt.mx))/(dim(gt.mx)[1]*dim(gt.mx)[2]) # <1%
 
-# Histograms of all gq and dp
+# Histograms of gq and dp
 hist(gq.mx, breaks=50, main="Histogram of gq", xlab=NULL)
 hist(gq.mx, breaks=250, xlim=c(80,100), main="Histogram of gq (zoom to 80-100)", xlab=NULL)
 
@@ -238,11 +228,11 @@ removes ~5% of genotypes
 ```{r filter_by_gq}
 
 # num of NAs before filter
-sum(is.na(gt.mx))/(dim(gt.mx)[1]*dim(gt.mx)[2]) # ~0.4%
+sum(is.na(gt.mx))/(dim(gt.mx)[1]*dim(gt.mx)[2]) # <1%
 
 # num of genotypes to be removed
 sum(gq.mx < min.gq, na.rm=TRUE)
-sum(gq.mx < min.gq, na.rm=TRUE)/sum(!is.na(gq.mx))
+sum(gq.mx < min.gq, na.rm=TRUE)/sum(!is.na(gq.mx)) # ~5%
 
 # apply filter
 NA -> gt.mx[ gq.mx < min.gq ]
@@ -257,17 +247,17 @@ sum(is.na(gt.mx))/(dim(gt.mx)[1]*dim(gt.mx)[2]) # ~5%
 
 # filter_by_dp
 
-removes ~2% more of genotypes
+removes ~2.5% genotypes MORE
 
 ```{r filter_by_dp}
 
 # num of genotypes to be removed
 sum(dp.mx < min.dp, na.rm=TRUE)
-sum(dp.mx < min.dp, na.rm=TRUE)/sum(!is.na(gq.mx)) # ~5.5%
+sum(dp.mx < min.dp, na.rm=TRUE)/sum(!is.na(gq.mx)) # ~6.7%
 
 # num of genotypes to be removed
 sum(dp.mx > max.dp, na.rm=TRUE)
-sum(dp.mx > max.dp, na.rm=TRUE)/sum(!is.na(gq.mx)) # << 0.01%
+sum(dp.mx > max.dp, na.rm=TRUE)/sum(!is.na(gq.mx)) # << 1%
 
 # apply filter
 NA -> gt.mx[ dp.mx < min.dp ]
@@ -277,20 +267,21 @@ NA -> gt.mx[ dp.mx > max.dp ]
 rm(min.dp, max.dp)
 
 # num of NAs after filter
-sum(is.na(gt.mx))/(dim(gt.mx)[1]*dim(gt.mx)[2]) # ~7.2%
+sum(is.na(gt.mx))/(dim(gt.mx)[1]*dim(gt.mx)[2]) # ~7.6%
 
 ```
 
-# filter_by_discrepancies_between_ref_plus_alt_and_dp
+# filter_by_discrepancy_between_ref_plus_alt_and_dp
 
-For some reasons in a small number of genotypes (1.5%) sum of ref and alt was
-less than dp.  Such genotypes were considered dodgy and excluded. 
+In a small number of genotypes (~0.7%) dp was less than sum of ref and alt. 
+This is expected when some of Alt and Ref are of poor quality. 
+Such genotypes were considered dodgy and excluded. 
 
-```{r filter_by_discrepancies_between_ref_plus_alt_and_dp}
+```{r filter_by_discrepancy_between_ref_plus_alt_and_dp}
 
 # Sum of ref and alt
 sum.mx <- ref.mx + alt.mx
-NA -> sum.mx[ is.na(gt.mx) ] # do not include missed genotypes
+NA -> sum.mx[ is.na(gt.mx) ] # do not include data for already excluded genotypes
 
 # Explore sum.mx
 dim(sum.mx)
@@ -307,54 +298,58 @@ x <- dp.mx - sum.mx
 # count of discrepant genotypes
 sum(x != 0 , na.rm=TRUE) 
 sum(x > 0 , na.rm=TRUE) # sum of alt and ref may be higher than dp in some cases
-sum(x < 0 , na.rm=TRUE) # sum of alt and ref is never smaller than dp
+sum(x < 0 , na.rm=TRUE) # dp is never higher than sum of alt and ref
 
 # fraction of genotypes with discrepancy
-sum(x!=0 , na.rm=TRUE)/(nrow(x)*ncol(x)) # ~1.5%
+sum(x!=0 , na.rm=TRUE)/(nrow(x)*ncol(x)) # ~0.7%
 
 # Remove genotypes with discrepancy
 NA -> gt.mx[ x != 0 ]
 
 # num of NAs after filter
-sum(is.na(gt.mx))/(dim(gt.mx)[1]*dim(gt.mx)[2]) # ~8.8%
+sum(is.na(gt.mx))/(dim(gt.mx)[1]*dim(gt.mx)[2]) # ~8.3%
 
 # clean up
 rm(x)
 
 ```
 
-# filter_heterozigous_genotypes_by_crma
+# filter_heterozigous_genotypes
 
-This could be dome by fraction or by probability.
-Filtering out genotypes with p<0.05% removes ~1.5% more genotypes
+Filtering out genotypes with probability of reads split p<0.05%  
+Removes ~1.5% genotypes MORE
 
-```{r filter_heterozigous_genotypes_by_crma}
+```{r filter_heterozigous_genotypes}
 
 # Keep only hets in sum.mx
 sum.het.mx <- sum.mx
 NA -> sum.het.mx[ gt.mx != 1 ] 
 
 # ------------------------------------------------------------ #
-#                       Calculate crma                         #
+#  Calculate number of reads supporting less rpresent allele   #
 # ------------------------------------------------------------ #
 
 # Subtract alt from ref
 ref.sub.alt <- ref.mx - alt.mx
 
 # it is important for this matrix to have no NAs
-# for using it in subscripted assignments below when calculating crma
+# for using it in subscripted assignments below
 sum(is.na(ref.sub.alt)) 
 
 dim(ref.sub.alt)
 ref.sub.alt[1:16,1:5]
 
-# Count reads with minor allele in het genotypes (crma)
+# Make matrix for counts of reads supporting less rpresent allele (crma matrix)
 nr <- nrow(ref.sub.alt)
 nc <- ncol(ref.sub.alt)
 crma.het.mx <- matrix(rep(-1,nr*nc),nrow=nr)
+
+# Count reads supporting less rpresented allele
 crma.het.mx[ref.sub.alt == 0] <- ref.mx[ref.sub.alt == 0] # use any (e.g. ref) if no difference
 crma.het.mx[ref.sub.alt < 0] <- ref.mx[ref.sub.alt < 0] # use ref, if ref is smaller
 crma.het.mx[ref.sub.alt > 0] <- alt.mx[ref.sub.alt > 0] # use alt, if alt is smaller
+
+# Clean and check
 NA -> crma.het.mx[ gt.mx != 1 ] # retain only hets
 NA -> crma.het.mx[ is.na(gt.mx) ] # keep only crmas for known genotypes
 sum(crma.het.mx == -1, na.rm=TRUE) # make sure no -1 codes are retained
@@ -374,68 +369,43 @@ rm(ref.sub.alt, nr, nc)
 #                        Apply filter                          #
 # ------------------------------------------------------------ #
 
-# If hets are filtered by probability
-if( hets.filter.type == "probability"){
+# Calculate probabilities of observed read splits under true heterozigous assumption
+prma.het.mx <- pbinom(crma.het.mx, sum.het.mx, 0.5)
+
+dim(prma.het.mx)
+prma.het.mx[1:16,1:5]
+
+# Fraction of hets with unlikely ratio of alt and refs
+sum(prma.het.mx < hets.min.p, na.rm=TRUE)/(nrow(prma.het.mx)*ncol(prma.het.mx)) # ?%
+
+# Remove het genotypes with unlikely ratio of alt and ref reads
+NA -> gt.mx[ prma.het.mx < hets.min.p ]
+# Use two- or one-tailed cut-offs?
   
-  # Calculate probabilities of observed read splits under heterozigous call
-  prma.het.mx <- pbinom(crma.het.mx, sum.het.mx, 0.5) # used if hets are filtered by probability
-
-  dim(prma.het.mx)
-  prma.het.mx[1:16,1:5]
-
-  # Remove het genotypes with unlikely ratio of alt and ref reads
-  NA -> gt.mx[ prma.het.mx < hets.filter.threshold ]
-  # Use two- or one-tailed cut-offs?
-  
-  # Clean-up
-  rm(prma.het.mx)
-  
-}
-
-# If hets are filtered by fraction
-if( hets.filter.type == "fraction"){
-
-  # Calculate fractions of reads with minor allele (frma)
-  frma.het.mx <- crma.het.mx / sum.het.mx # used if hets are filtered by fraction
-  
-  dim(frma.het.mx)
-  frma.het.mx[1:16,1:5]
-
-  # Check that all missed values are NAs (i.e. there is no "nans" and "infinits"
-  # NA is any Non Available data (e.g. something was missed)
-  # NaN = Not a Number (e.g. Infinity, when genotypes with zero sum of ref + alt ...)?
-  sum(is.na(frma.het.mx)) 
-  sum(!is.finite(frma.het.mx)) 
-  sum(is.nan(frma.het.mx)) 
-
-  # Remove het genotypes with low fraction of rare allele reads
-  NA -> gt.mx[ frma.het.mx < hets.filter.threshold ]
-
-  # Clean-up
-  rm(frma.het.mx)
-  
-}
+# Clean-up
+rm(prma.het.mx)
 
 # num of NAs after filter
-sum(is.na(gt.mx))/(dim(gt.mx)[1]*dim(gt.mx)[2]) # ~8.8%
+sum(is.na(gt.mx))/(dim(gt.mx)[1]*dim(gt.mx)[2]) # ~9.7%
 
 # Clean-up
-rm(hets.filter.type, hets.filter.threshold, crma.het.mx, sum.het.mx)
+rm(hets.min.p, crma.het.mx, sum.het.mx)
 
 ```
 
-# filter_homozygous_genotypes_by_crma
+# filter_homozygous_genotypes
 
-Filtering with 5% threshold removes <1% more genotypes
+Assume that more represented allele was called as homozygous
+Filtering with 95% threshold removes <1% more genotypes
 
-```{r filter_homozygous_genotypes_by_crma}
+```{r filter_homozygous_genotypes}
 
 # Keep only homs in sum.mx
 sum.hom.mx <- sum.mx
 NA -> sum.hom.mx[ gt.mx == 1 ] 
 
 # ------------------------------------------------------------ #
-#                       Calculate crma                         #
+#  Calculate number of reads supporting more rpresent allele   #
 # ------------------------------------------------------------ #
 
 # Subtract alt from ref
@@ -448,13 +418,17 @@ sum(is.na(ref.sub.alt))
 dim(ref.sub.alt)
 ref.sub.alt[1:16,1:5]
 
-# Count reads with minor allele in het genotypes (crma)
+# Make matrix for counts of reads supporting more rpresented allele (crma matrix)
 nr <- nrow(ref.sub.alt)
 nc <- ncol(ref.sub.alt)
 crma.hom.mx <- matrix(rep(-1,nr*nc),nrow=nr)
+
+# Count reads supporting more rpresent allele
 crma.hom.mx[ref.sub.alt == 0] <- ref.mx[ref.sub.alt == 0] # use any (e.g. ref) if no difference
-crma.hom.mx[ref.sub.alt < 0] <- ref.mx[ref.sub.alt < 0] # use ref, if ref is smaller
-crma.hom.mx[ref.sub.alt > 0] <- alt.mx[ref.sub.alt > 0] # use alt, if alt is smaller
+crma.hom.mx[ref.sub.alt > 0] <- ref.mx[ref.sub.alt > 0] # use ref, if ref is bigger
+crma.hom.mx[ref.sub.alt < 0] <- alt.mx[ref.sub.alt < 0] # use alt, if alt is bigger
+
+# Clean and check
 NA -> crma.hom.mx[ gt.mx == 1 ] # retain only homs
 NA -> crma.hom.mx[ is.na(gt.mx) ] # keep only crmas for known genotypes
 sum(crma.hom.mx == -1, na.rm=TRUE) # make sure no -1 codes are retained
@@ -470,33 +444,33 @@ gt.mx[1:5,1:5]
 # Clean-up
 rm(ref.sub.alt, nr, nc)
 
-# Calculate and explore frma hom
-frma.hom.mx <- crma.hom.mx / sum.hom.mx
-frma.hom.mx[1:5,1:5]
-max(frma.hom.mx, na.rm=TRUE) # 0.46: There is a homozigous call with reads split as 46:54
-
-# Fraction of homs where unexpected reads fraction exceeds the threshold
-sum(frma.hom.mx > homs.max.frma, na.rm=TRUE)/(nrow(frma.hom.mx)*ncol(frma.hom.mx)) # <0.1%
-
 # ------------------------------------------------------------ #
 #                           Apply filter                       #
 # ------------------------------------------------------------ #
 
+# Calculate and explore matrix with fractions of more represented reads (frma hom)
+frma.hom.mx <- crma.hom.mx / sum.hom.mx
+frma.hom.mx[1:5,1:5]
+min(frma.hom.mx, na.rm=TRUE) # 0.5: There is a homozigous call with reads split as 50:50
+
+# Fraction of homs where fraction of more represented reads is below the threshold
+sum(frma.hom.mx < homs.min.support, na.rm=TRUE)/(nrow(frma.hom.mx)*ncol(frma.hom.mx)) # <0.1%
+
 # Filter homozigous genotype calls (i.e. coded 0 or 2)
 # that have too high minor allele reads fraction
-NA -> gt.mx[ frma.hom.mx > homs.max.frma ]
+NA -> gt.mx[ frma.hom.mx < homs.min.support ]
 
 # num of NAs after filter
-sum(is.na(gt.mx))/(dim(gt.mx)[1]*dim(gt.mx)[2]) # ~8.8%
+sum(is.na(gt.mx))/(dim(gt.mx)[1]*dim(gt.mx)[2]) # ~9.7%
 
 # Cleanup
-rm(homs.max.frma, crma.hom.mx, frma.hom.mx, sum.mx, sum.hom.mx)
+rm(homs.min.support, crma.hom.mx, frma.hom.mx, sum.mx, sum.hom.mx)
 
 ```
 
 # filter_variants_by_final_call_rate
 
-Removes ~19% of variants (85k -> 69k)
+Removes ~14% of variants (280k -> 242k)
 
 ```{r filter_variants_by_final_call_rate}
 
@@ -508,8 +482,8 @@ hist(y, breaks=100, xlab=NULL, main="Call rates per variant after genotypes filt
 # Set filter and estimate the proportion of variants to remove
 var.retained <- y >= min.call.rate
 sum(var.retained)
-1-sum(var.retained)/nrow(gt.mx)
-rm(x,y,min.call.rate)
+1 - sum(var.retained)/nrow(gt.mx)
+rm(x, y, min.call.rate)
 
 # Remove variants with loaw call rates
 gt.mx <- gt.mx[ var.retained, ]
@@ -535,12 +509,13 @@ rm(x,y)
 ```{r histograms_after_filtering}
 
 # Fraction of NA genotypes after all filters
-sum(is.na(gt.mx))/(dim(gt.mx)[1]*dim(gt.mx)[2]) # ~4.5%
+sum(is.na(gt.mx))/(dim(gt.mx)[1]*dim(gt.mx)[2]) # ~4.7%
 
 # Histograms of gq and dp after filtering
 hist(gq.mx[!is.na(gt.mx)], breaks=50, xlim=c(0,100), main="Histograms of gq after filtering (gt is not NA)", xlab=NULL)
 hist(gq.mx[!is.na(gt.mx)], breaks=200, xlim=c(80,100), main="Histograms of gq after filtering (gt is not NA, zoom to 80-100)", xlab=NULL)
 
+# Histograms of dp and dp after filtering
 hist(dp.mx[!is.na(gt.mx)], breaks=50, main="Histograms of dp after filtering (gt is not NA)", xlab=NULL)
 hist(dp.mx[!is.na(gt.mx)], breaks=150, xlim=c(0,150), main="Histograms of dp after filtering (gt is not NA, zoom to 0-150)", xlab=NULL)
 
@@ -557,8 +532,7 @@ rm(x,y)
 
 ```{r save_data}
 
-interim_data_file <- paste(interim_data_folder, "s02_filter_genotypes.RData", sep="/")
-save.image(file=interim_data_file)
+save.image(paste(interim_data_folder, "/", "s02_filter_genotypes_", prefix, ".RData", sep=""))
 
 ```
 

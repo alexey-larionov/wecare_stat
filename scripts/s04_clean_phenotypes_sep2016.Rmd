@@ -1,18 +1,18 @@
 ---
-title: "Reshape and clean data: wecare feb2016"
+title: "Clean phenotypes: wecare feb2016"
 author: "Alexey Larionov"
 output: html_document
 params:
   interim_data: "/scratch/medgen/users/alexey/wecare_stat_sep2016/interim_data"
-  subset: "std.1"
+  prefix: "wes04_sep2016_vqsr_shf_sma_ann"
+  subset: "std1"
 ---
 
 started: 01Mar2016  
-last updated: 09Sep2016
+last updated: 23Sep2016
 
 # Summary
 
-Select data for the requiested subset  
 Explore and clean cases (remove odd and duplicated cases etc)  
 Explore and clean phenoitype data, compile a single table with required phenotype annotations  
 Save selected reshaped data
@@ -30,24 +30,14 @@ graphics.off()
 
 # Read parameters
 interim_data_folder <- params$interim_data
-data_subset <- params$subset
+variants_set <- params$subset
+prefix <- params$prefix
 
 # Required libraries
 library(tidyr) # for separate
 library(dplyr) # for piping, filter, select etc
 library(stringr) # for str_replace_all
 library(ggplot2) # for some plots
-
-# For debugging
-#interim_data_folder <- "/scratch/medgen/users/alexey/wecare_aug2016/interim_data"
-#data_subset <- "priority_genes_strict"
-#setwd("/scratch/medgen/scripts/wecare_skat_08.16/scripts")
-
-# Check subset
-if (! data_subset %in% c("strict", "std.1", "std.2", "relaxed", "priority_genes_relaxed", "priority_genes_strict", "all_variants")){
-  print("Wrong data subset")
-  stop
-}
 
 ```
 
@@ -58,81 +48,13 @@ if (! data_subset %in% c("strict", "std.1", "std.2", "relaxed", "priority_genes_
 # Remove params object to avoid interference with load() function
 rm(params)
 
-interim_data_file <- paste(interim_data_folder, "s03_filter_by_effect.RData", sep="/")
+interim_data_file <- paste(interim_data_folder, "/", "s03_filter_by_effect_", prefix, "_", variants_set,".RData", sep="")
 load(file=interim_data_file)
 ls()
 
-if(data_subset == "strict"){
-  vv.df <- vv.str
-  kgen.df <- kgen.str
-  exac.df <- exac.str
-  genotypes.mx <- gt.str
-  colnames(genotypes.mx) <- sub(".GT", "", colnames(genotypes.mx))
-  interim_data_file <- paste(interim_data_folder, "s04_clean_pheno_str.RData", sep="/")
-}
-
-if(data_subset == "std.1"){
-  vv.df <- vv.std.1
-  kgen.df <- kgen.std.1
-  exac.df <- exac.std.1
-  genotypes.mx <- gt.std.1
-  colnames(genotypes.mx) <- sub(".GT", "", colnames(genotypes.mx))
-  interim_data_file <- paste(interim_data_folder, "s04_clean_pheno_std1_feb2016.RData", sep="/")
-}
-
-if(data_subset == "std.2"){
-  vv.df <- vv.std.2
-  kgen.df <- kgen.std.2
-  exac.df <- exac.std.2
-  genotypes.mx <- gt.std.2
-  colnames(genotypes.mx) <- sub(".GT", "", colnames(genotypes.mx))
-  interim_data_file <- paste(interim_data_folder, "s04_clean_pheno_std2_feb2016.RData", sep="/")
-}
-
-if(data_subset == "relaxed"){
-  vv.df <- vv.rel
-  kgen.df <- kgen.rel
-  exac.df <- exac.rel
-  genotypes.mx <- gt.rel
-  colnames(genotypes.mx) <- sub(".GT", "", colnames(genotypes.mx))
-  interim_data_file <- paste(interim_data_folder, "s04_clean_pheno_rel_feb2016.RData", sep="/")
-}
-
-if(data_subset == "priority_genes_relaxed"){
-  vv.df <- vv.pri.rel
-  kgen.df <- kgen.pri.rel
-  exac.df <- exac.pri.rel
-  genotypes.mx <- gt.pri.rel
-  colnames(genotypes.mx) <- sub(".GT", "", colnames(genotypes.mx))
-  interim_data_file <- paste(interim_data_folder, "s04_clean_pheno_pri_rel_feb2016.RData", sep="/")
-}
-
-if(data_subset == "priority_genes_strict"){
-  vv.df <- vv.pri.str
-  kgen.df <- kgen.pri.str
-  exac.df <- exac.pri.str
-  genotypes.mx <- gt.pri.str
-  colnames(genotypes.mx) <- sub(".GT", "", colnames(genotypes.mx))
-  interim_data_file <- paste(interim_data_folder, "s04_clean_pheno_pri_str_feb2016.RData", sep="/")
-}
-
-if(data_subset == "all_variants"){
-  genotypes.mx <- gt.mx
-  colnames(genotypes.mx) <- sub(".GT", "", colnames(genotypes.mx))
-  interim_data_file <- paste(interim_data_folder, "s04_clean_pheno_all_feb2016.RData", sep="/")
-}
-
-rm(gt.mx, gq.mx, dp.mx, ref.mx, alt.mx)
-
-rm(vv.str, gt.str, gq.str, dp.str, ref.str, alt.str, kgen.str, exac.str)
-rm(vv.std.1, gt.std.1, gq.std.1, dp.std.1, ref.std.1, alt.std.1, kgen.std.1, exac.std.1)
-rm(vv.std.2, gt.std.2, gq.std.2, dp.std.2, ref.std.2, alt.std.2, kgen.std.2, exac.std.2)
-rm(vv.rel, gt.rel, gq.rel, dp.rel, ref.rel, alt.rel, kgen.rel, exac.rel)
-
-rm(vv.pri.rel, gt.pri.rel, gq.pri.rel, dp.pri.rel, ref.pri.rel, alt.pri.rel, kgen.pri.rel, exac.pri.rel)
-rm(vv.pri.str, gt.pri.str, gq.pri.str, dp.pri.str, ref.pri.str, alt.pri.str, kgen.pri.str, exac.pri.str)
-
-ls()
+genotypes.mx <- gt.mx
+colnames(genotypes.mx) <- sub(".GT", "", colnames(genotypes.mx))
+rm(gt.mx)
 
 # I do NOT convert_dfs_to_tables because it loses row names. 
 # However, it could be considered later, 
@@ -179,128 +101,27 @@ sum(rownames(genotypes.mx) != rownames(exac.df), na.rm=TRUE)
 
 ```
 
-# reshape_variants_annotations
+# select_relevant_variants_annotations
 
-```{r reshape_variants_annotations}
+```{r select_relevant_variants_annotations}
 
-# Move variants IDs to explicit variable
-vv.df <- cbind(rownames(vv.df),vv.df)
-"VarID" -> colnames(vv.df)[1]
-
-# select relevant variants annotations
 variants.df <- 
   vv.df %>% 
-  select(VarID, SYMBOL, TYPE, CHROM, POS, REF, ALT, AC, AF, AN, 
-         Consequence, SIFT, PolyPhen, CLIN_SIG, 
-         GMAF, EUR_MAF, ALT_frequency_in_1k_95, bc_risk, bc_somatic, dna_repair, es_related)
+  select(SplitVarID, SYMBOL, TYPE, CHROM, POS, REF, ALT, AC, AF, AN, 
+         Consequence, SIFT_call, SIFT_score, PolyPhen_call, PolyPhen_score, CLIN_SIG, 
+         Existing_variation, Multiallelic, priority_genes)
 
-rm(vv.df)
-
-# Explore cases with confusing GMAF/EUR_MAF containing & symbol (as inserted by VEP)
-nrow(variants.df %>% filter(grepl("&",GMAF)))
-nrow(variants.df %>% filter(grepl("&",EUR_MAF)))
-variants.df %>% 
-  filter(grepl("&",EUR_MAF)) %>% 
-  select(c(1:6), GMAF, EUR_MAF) %>% 
-  top_n(10,EUR_MAF)
-
-# There are even 3 variants with triplicated values separated by &
-variants.df[c(1235, 11405, 15894),c("GMAF", "EUR_MAF")]
-
-# Split cases with confusing EUR_MAF containing "&"" symbol
-variants.df <- 
-  variants.df %>% 
-  separate(EUR_MAF, c("EUR_MAF1", "EUR_MAF2"), "&") 
-
-# All duplicated values are the same
-sum(variants.df$EUR_MAF1 != variants.df$EUR_MAF2, na.rm=TRUE)
-
-# Remove one of the duplicates
-variants.df <- 
-  variants.df %>% 
-  select(-EUR_MAF2)
-
-# split GMAF and EUR_MAF1
-variants.df <- 
-  variants.df %>% 
-  separate(GMAF, c("GMAF_Allele", "GMAF_Fraction"), ":") %>% 
-  separate(EUR_MAF1, c("EUR_MAF_Allele", "EUR_MAF_Fraction"), ":") 
-
-# Convert columns to numeric etc
-as.numeric(variants.df$GMAF_Fraction) -> variants.df$GMAF_Fraction
-as.numeric(variants.df$EUR_MAF_Fraction) -> variants.df$EUR_MAF_Fraction
-
-# Change "" to NAs
-NA -> variants.df$GMAF_Allele[variants.df$GMAF_Allele == ""]
-NA -> variants.df$EUR_MAF_Allele[variants.df$EUR_MAF_Allele == ""]
-NA -> variants.df$SIFT[variants.df$SIFT == ""]
-NA -> variants.df$PolyPhen[variants.df$PolyPhen == ""]
-NA -> variants.df$CLIN_SIG[variants.df$CLIN_SIG == ""]
-
-# Convert chars to factors
-as.factor(variants.df$GMAF_Allele) -> variants.df$GMAF_Allele
-as.factor(variants.df$EUR_MAF_Allele) -> variants.df$EUR_MAF_Allele
-
-# Change "true" to TRUE
-sum(variants.df$ALT_frequency_in_1k_95 == "true", na.rm = TRUE)
-variants.df <- 
-  variants.df %>% 
-  mutate(frequent_in_1k=as.logical(
-    str_replace_all(ALT_frequency_in_1k_95, "true", TRUE))) %>% 
-  select(-ALT_frequency_in_1k_95)
-sum(variants.df$frequent_in_1k, na.rm=TRUE)
-
-# Split SIFT
-variants.df <- 
-  variants.df %>% 
-  mutate(SIFT_call=sub("\\(.*\\)","",SIFT)) %>% 
-  mutate(SIFT_score=as.numeric(
-    sub(".*\\(","", sub("\\)","",SIFT)))) %>% 
-  select(-SIFT)
-
-# Split PolyPhen
-variants.df <- 
-  variants.df %>% 
-  mutate(PolyPhen_call=sub("\\(.*\\)","",PolyPhen)) %>% 
-  mutate(PolyPhen_score=as.numeric(
-    sub(".*\\(","", sub("\\)","",PolyPhen)))) %>% 
-  select(-PolyPhen)
-
-# --- Rearrange priority genes columns --- #
-
-bc_risk_v <- rep("", nrow(variants.df))
-"bc_risk" -> bc_risk_v[variants.df$bc_risk]
-
-bc_somatic_v <- rep("", nrow(variants.df))
-"bc_somatic" -> bc_somatic_v[variants.df$bc_somatic]
-
-dna_repair_v <- rep("", nrow(variants.df))
-"dna_repair" -> dna_repair_v[variants.df$dna_repair]
-
-es_related_v <- rep("", nrow(variants.df))
-"es_related" -> es_related_v[variants.df$es_related]
-
-priority_genes <- paste(bc_risk_v,bc_somatic_v,dna_repair_v,es_related_v, sep=",")
-priority_genes <- sub(",{2,}", ",", priority_genes)
-priority_genes <- sub("^,", "", priority_genes)
-priority_genes <- sub(",$", "", priority_genes)
-
-variants.df <- cbind(variants.df,priority_genes)
-variants.df <- variants.df %>% select(- bc_risk, - bc_somatic, - dna_repair, - es_related)
-NA -> variants.df[variants.df$priority_genes == "", "priority_genes"]
-
-rm(priority_genes, bc_risk_v, bc_somatic_v, dna_repair_v, es_related_v)
-
-# Check variants table
 dim(variants.df)
 str(variants.df)
 variants.df[1:5,1:5]
 
+rm(vv.df)
+
 ```
 
-# reshape_covar
+# explore_and_reshape_covar_table
 
-```{r reshape_covar}
+```{r explore_and_reshape_covar_table}
 
 dim(covar.df)
 colnames(covar.df)
@@ -332,7 +153,7 @@ sum(good_location)
 # Deleterious split 480 vs 18, no missed data
 sum(Deleterious)
 
-# Deleterious split 158 vs 340, no missed data
+# family_history split 158 vs 340, no missed data
 sum(family_history)
 
 # XRTBrCHAR is the same as XRTBreast, no missed values
@@ -391,29 +212,34 @@ pheno.df <- demographics.df %>% filter(! Subject_ID %in% odd_cases)
 dim(pheno.df)
 pheno.df[1:10,1:5]
 
+rm(odd_cases)
+
 ```
 
 ## exclude_duplicated_cases
 
 ```{r exclude_duplicated_cases}
 
-duplicated_cases <- 
-  pheno.df %>% 
-  filter(duplicated(Subject_ID)) %>% 
-  select(Subject_ID)
-
-duplicated_cases <- as.vector(duplicated_cases[,1])
-duplicated_cases
+# Get positions and IDs of duplicated cases
+duplicated_cases_bool <- duplicated(pheno.df$Subject_ID) # Excluding position of the 1st duplicate
+duplicated_cases_ids <- as.vector(pheno.df$Subject_ID[duplicated_cases_bool])
 
 # Phenotype annotations for the duplicate record are identical
 pheno.df %>% 
-  filter(Subject_ID %in% duplicated_cases) %>% 
+  filter(Subject_ID %in% duplicated_cases_ids) %>% 
   select(1:5)
 
-pheno.df <- pheno.df %>% filter(!duplicated(Subject_ID))
+# Remove the duplicated cases (except the 1st duplicate)
+pheno.df <- pheno.df[!duplicated_cases_bool,]
+
+# Explore result
 dim(pheno.df)
 pheno.df[1:10,1:5]
 
+# Clean-up
+rm(duplicated_cases_bool, duplicated_cases_ids)
+
+# Attach pheno for further exploration
 attach(pheno.df)
 
 ```
@@ -830,6 +656,9 @@ ggplot(pheno.df) +
   geom_bar(colour="black", alpha=0.3)
 table(chemo)
 sum(is.na(chemo))
+
+# Compare chemo and CMF
+pheno.df[1:5,c("chemo", "CMF")]
 
 # Treatment by age: cytotoxic are more often given to younger patients
 ggplot(pheno.df) + 
@@ -1656,7 +1485,7 @@ pheno.df <- pheno.df %>% mutate(
 pheno.df <- pheno.df %>% select(-rh_age_menarche, -pr1_cat)
 
 # Remove demographics table
-rm(demographics.df, odd_cases, duplicated_cases)
+rm(demographics.df)
 
 ```
 
@@ -1777,6 +1606,9 @@ rm(ph.df, pheno.df, covar.df)
 
 ```{r merge_phenotypes_and_samples}
 
+# Prepare key for joining
+samples.df$gwas_id <- as.vector(samples.df$gwas_id)
+
 phenotypes.df <- full_join(samples.df, phen_types.df, by="gwas_id")
 
 dim(phenotypes.df)
@@ -1784,7 +1616,10 @@ colnames(phenotypes.df)
 str(phenotypes.df)
 phenotypes.df[1:10, 1:7]
 
-rm(samples.df, phen_types.df)
+pheno_table_file <- paste(interim_data_folder, "/", "s03_filter_by_effect_", prefix, "_", variants_set,"_pheno.txt", sep="")
+write.table(phenotypes.df, file=pheno_table_file, quote=FALSE, sep="\t")
+
+rm(samples.df, phen_types.df, pheno_table_file)
 
 ```
 
@@ -1793,6 +1628,8 @@ rm(samples.df, phen_types.df)
 ```{r data_summary}
 
 ls()
+
+variants_set
 
 dim(genotypes.mx)
 genotypes.mx[1:5,1:5]
@@ -1833,14 +1670,16 @@ sum(rownames(genotypes.mx) != variants.df$VarID )
 
 ```{r save_data}
 
-save.image(file=interim_data_file)
+save.image(paste(interim_data_folder, "/", "s04_clean_phenotypes", prefix, "_", variants_set,".RData", sep=""))
 
 ```
 
 # final_section
 
 ```{r final_section}
+
 ls()
 sessionInfo()
 Sys.time()
+
 ```

@@ -58,7 +58,7 @@ fi
 
 # Check the job description file format (just check the first line only)
 read line1 < "${job_file}"
-if [ "${line1}" != "wecare stat analysis" ] 
+if [ "${line1}" != "Job description for wecare stat analysis" ] 
 then
   echo "" 
   echo "Unexpected format of the job file ${job_file}"
